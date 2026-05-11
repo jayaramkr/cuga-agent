@@ -584,7 +584,7 @@ class LLMManager:
                 logger.debug(f"Creating AzureChatOpenAI reasoning model: {model_name} (no temperature)")
                 llm = AzureChatOpenAI(
                     model_version=api_version,
-                    timeout=61,
+                    timeout=int(os.environ.get("OPENAI_TIMEOUT", 300)),
                     api_version="2025-04-01-preview",
                     azure_deployment=model_name + "-" + api_version,
                     max_completion_tokens=max_tokens,
@@ -592,7 +592,7 @@ class LLMManager:
             else:
                 logger.debug(f"Creating AzureChatOpenAI model: {model_name} - {api_version}")
                 llm = AzureChatOpenAI(
-                    timeout=61,
+                    timeout=int(os.environ.get("OPENAI_TIMEOUT", 300)),
                     azure_deployment=model_name + "-" + api_version,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -603,7 +603,7 @@ class LLMManager:
             openai_params: Dict[str, Any] = {
                 "model_name": model_name,
                 "max_tokens": max_tokens,
-                "timeout": 61,
+                "timeout": int(os.environ.get("OPENAI_TIMEOUT", 300)),
             }
 
             if not is_reasoning:
@@ -713,7 +713,7 @@ class LLMManager:
             openrouter_params: Dict[str, Any] = {
                 "model_name": model_name,
                 "max_tokens": max_tokens,
-                "timeout": 61,
+                "timeout": int(os.environ.get("OPENAI_TIMEOUT", 300)),
                 "openai_api_key": api_key,
                 "openai_api_base": base_url,
             }
