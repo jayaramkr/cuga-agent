@@ -18,6 +18,11 @@ the test set. It is the configuration behind the "clean" CUGA numbers below.
    - plain final-answer prompt: the compose-and-send rule (#728/#729) and the yes/no and candidate-figure rules (#757).
 3. **ACTION/QUERY pre-classifier off by default** (`appworld_classify_action_tasks = false`). Its prompt comes
    entirely from test failures (#544, #728).
+4. **A test answer removed from the final-answer prompts.** The plain prompt's calculation example `1592.00` is the
+   expected answer of test_normal `21abae1_3`, and its totals rule quoted that task family's wording ("sent and
+   received", "this month so far"); the JSON prompt's example did too. Both came from `d378687e` (#148), whose
+   commit and PR name no task, so it was found by comparing prompt text with test answers rather than by tracing
+   commits. The example is now `115.75`, the sum in the prompt's own few-shot.
 
 The pre-execute **VERIFY gate must also be off.** Its prompt was designed around test_challenge `92fe421_1` and tuned
 on "a 48-task dev subset of test_challenge" (#739). It is off in `settings.toml`, but cuga-eval's
@@ -57,6 +62,9 @@ Reflection stays on, as in cuga-eval's AppWorld configuration.
 | 90-task `test_compare_full` TGC / SGC | 82.8 (82.2-83.3) / 71.7, 2 runs | 81.5 (78.9-85.6) / 67.8, 3 runs |
 
 On the 90-task set, stock CUGA (blog: 81.1 / 66.7) and this branch score the same.
+
+These results come from the branch before change 4. It cannot have helped: `21abae1_3` is passed by every
+CUGA run and also by all three ReAct runs, whose prompt has no such text.
 
 ## Limits
 
