@@ -1,0 +1,77 @@
+diff --git a/src/appworld/apps/lib/models/db.py b/src/appworld/apps/lib/models/db.py
+index a5d74c4..62260ed 100644
+--- a/src/appworld/apps/lib/models/db.py
++++ b/src/appworld/apps/lib/models/db.py
+@@ -299,11 +299,35 @@ def get_direct_cached_sqlite3_connection(db_app_path: str) -> SQLite3Connection:
+ 
+ 
+ def get_direct_sqlite3_connection(db_app_path: str) -> SQLite3Connection:
+-    connection = sqlite3.connect(db_app_path)
++    connection = sqlite3.connect(node_local_base_db_path(db_app_path))
+     connection.execute("PRAGMA mmap_size = 268435456")  # 256MB
+     return connection
+ 
+ 
++def node_local_base_db_path(db_app_path: str) -> str:
++    # Base DBs are read-only, and every AppWorld process reads all of them for every task. On a shared
++    # cluster filesystem, many nodes reading the same file can be very slow (CCC GPFS, Oct 31 2026:
++    # amazon.db fell to ~11 MB/s and evaluation from 2 tasks/s to ~100 s/task). So each node copies a
++    # base DB to /dev/shm once and opens that copy. APPWORLD_NO_LOCAL_BASE_DBS=1 disables this.
++    base_db_home_path = get_db_home_path(storage_type="disk", type="base")
++    if (
++        os.environ.get("APPWORLD_NO_LOCAL_BASE_DBS")
++        or not os.path.isdir("/dev/shm")
++        or os.path.dirname(os.path.abspath(db_app_path)) != os.path.abspath(base_db_home_path)
++    ):
++        return db_app_path
++    stat = os.stat(db_app_path)
++    local_directory = f"/dev/shm/appworld_base_dbs_{os.getuid()}"
++    file_name = f"{stat.st_size}_{int(stat.st_mtime)}_{os.path.basename(db_app_path)}"
++    local_path = os.path.join(local_directory, file_name)
++    if not os.path.exists(local_path):
++        os.makedirs(local_directory, exist_ok=True)
++        temporary_path = f"{local_path}.{os.getpid()}.tmp"
++        shutil.copyfile(db_app_path, temporary_path)
++        os.replace(temporary_path, local_path)  # atomic: concurrent processes never see a partial copy
++    return local_path
++
++
+ def merge_db_changes(changes_: list[Change]) -> list[Change]:
+     # NOTE: This is not used anywhere currently. Only do it if it gives performance improvement.
+     active_statement: str | None = None
+diff --git a/src/appworld/apps/lib/models/orm.py b/src/appworld/apps/lib/models/orm.py
+index 7848059..764978b 100644
+--- a/src/appworld/apps/lib/models/orm.py
++++ b/src/appworld/apps/lib/models/orm.py
+@@ -98,6 +98,31 @@ if TYPE_CHECKING:
+ TSQLModel = TypeVar("TSQLModel", bound="SQLModel")
+ 
+ 
++def _store_plain_datetimes_naive() -> None:
++    # Newer sqlmodel maps plain datetime fields to UTCDateTime, which rejects naive values.
++    # AppWorld datetimes are naive, so e.g. amazon.place_order failed on OrderItem.expected_delivery_at
++    # after the order row was already written. Keep the older naive DateTime column instead.
++    try:
++        import sqlmodel.main
++        from sqlalchemy import DateTime as SQLDateTime
++        from sqlmodel.sql.sqltypes import UTCDateTime
++    except ImportError:  # older sqlmodel: plain datetime fields are already naive
++        return
++    get_sqlalchemy_type = sqlmodel.main.get_sqlalchemy_type
++    if getattr(get_sqlalchemy_type, "stores_naive_datetimes", False):
++        return
++
++    def get_naive_sqlalchemy_type(field: Any) -> Any:
++        type_ = get_sqlalchemy_type(field)
++        return SQLDateTime(timezone=False) if isinstance(type_, UTCDateTime) else type_
++
++    get_naive_sqlalchemy_type.stores_naive_datetimes = True  # type: ignore[attr-defined]
++    sqlmodel.main.get_sqlalchemy_type = get_naive_sqlalchemy_type
++
++
++_store_plain_datetimes_naive()
++
++
+ class SQLModel(Registrable, _SQLModel):
+     app_name: ClassVar[str]
+     table_name: ClassVar[str]
