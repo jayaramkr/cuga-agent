@@ -21,6 +21,7 @@ wxo_integration = false
 benchmark = "default"
 # When benchmark is appworld: use plain `answer:` completion prompts (no JSON) for final formatting
 appworld_final_answer_plain = true
+appworld_classify_action_tasks = false  # ACTION/QUERY pre-classifier (#544, #728); off: its rules came from AppWorld test-task failures
 mode = 'api'
 use_extension = false
 shortlisting_tool_threshold = 35  # Enable find_tools if total number of tools exceeds this threshold
