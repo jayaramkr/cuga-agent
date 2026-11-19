@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
 from cuga.backend.cuga_graph.utils.thread_ids import logical_thread_id
+from cuga.backend.cuga_graph.nodes.cuga_lite import lessons
 from cuga.backend.activity_tracker.tracker import Step
 from cuga.backend.cuga_graph.nodes.cuga_agent_core.execution.todos import extract_task_todos_from_new_vars
 from cuga.backend.cuga_graph.nodes.cuga_agent_core.graph.graph_nodes import (
@@ -409,6 +410,13 @@ def create_sandbox_node(adapter: Any, base_thread_id: Any, base_apps_list: Any) 
                 execution_message_content = (
                     f"{execution_message_content}\n\n---\n\nSummary:\n{reflection_output}"
                 )
+            if lessons.enabled() and not fc_plan:
+                # lessons_v2 layers 2 and 3 (API class, API); opt-in via CUGA_LESSON_INDEX, see cuga_lite/lessons.py.
+                lesson_block = lessons.event_block(
+                    current_thread_id, state.script, output, lessons.thought_text(state.chat_messages)
+                )
+                if lesson_block:
+                    execution_message_content = f"{execution_message_content}\n\n{lesson_block}"
 
             if fc_plan:
                 adapter._tracker.collect_step(

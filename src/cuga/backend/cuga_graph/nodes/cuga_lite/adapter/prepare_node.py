@@ -11,6 +11,7 @@ from langgraph.types import Command
 from loguru import logger
 
 from cuga.backend.cuga_graph.utils.thread_ids import logical_thread_id, workspace_thread_id
+from cuga.backend.cuga_graph.nodes.cuga_lite import lessons
 from cuga.backend.cuga_graph.nodes.cuga_agent_core.execution.code_extraction import make_tool_awaitable
 from cuga.backend.cuga_graph.nodes.cuga_lite.adapter.arg_warning import make_arg_warning_callable
 from cuga.backend.cuga_graph.nodes.cuga_agent_core.execution.todos import create_update_todos_tool
@@ -547,6 +548,22 @@ def create_prepare_tools_and_apps_node(adapter: Any, lc_bind_tools_meta: dict) -
         )
         if evolve_extension:
             special_instructions_final = (special_instructions_final or "") + evolve_extension
+        if is_fresh_conversation and lessons.enabled():
+            # lessons_v2 layers 1 and 4 (answer, start); opt-in via CUGA_LESSON_INDEX, see cuga_lite/lessons.py.
+            first_human = next(
+                (m for m in (state.chat_messages or []) if getattr(m, "type", None) == "human"), None
+            )
+            instruction = (
+                first_human.content
+                if first_human is not None and isinstance(first_human.content, str)
+                else ""
+            )
+            lesson_thread = (
+                logical_thread_id(configurable) if "thread_id" in configurable else (state.thread_id or "")
+            )
+            special_instructions_final = (special_instructions_final or "") + lessons.start_sections(
+                lesson_thread, instruction
+            )
 
         cfg = config.get("configurable", {}) if config else {}
         _thread_id = logical_thread_id(cfg, "")
